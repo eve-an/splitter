@@ -1,4 +1,4 @@
-package middleware
+package http
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 )
 
-type Middleware func(http.Handler) http.Handler
+type middleware func(http.Handler) http.Handler
 
-func Chain(h http.Handler, m ...Middleware) http.Handler {
+func chain(h http.Handler, m ...middleware) http.Handler {
 	for i := len(m) - 1; i >= 0; i-- {
 		h = m[i](h)
 	}
@@ -39,7 +39,7 @@ func (rw *responseRecorder) Write(b []byte) (int, error) {
 	return n, err
 }
 
-func Logging(logger *slog.Logger) func(next http.Handler) http.Handler {
+func loggingMiddleware(logger *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -60,7 +60,7 @@ func Logging(logger *slog.Logger) func(next http.Handler) http.Handler {
 	}
 }
 
-func Recovery(logger *slog.Logger) func(next http.Handler) http.Handler {
+func recoveryMiddleware(logger *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
@@ -79,7 +79,7 @@ func Recovery(logger *slog.Logger) func(next http.Handler) http.Handler {
 	}
 }
 
-func WithRequestID(next http.Handler) http.Handler {
+func withRequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := uuid.NewString()
 		ctx := context.WithValue(r.Context(), "request_id", id)

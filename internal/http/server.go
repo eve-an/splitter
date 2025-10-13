@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 type Server struct {
@@ -12,12 +13,29 @@ type Server struct {
 	server *http.Server
 }
 
-func NewServer(address string, logger *slog.Logger) *Server {
+type Config struct {
+	Address     string
+	ReadTimeout time.Duration
+}
+
+func (c Config) Validate() error {
+	if c.Address == "" {
+		return errors.New("empty server address")
+	}
+
+	if c.ReadTimeout == 0 {
+		return errors.New("empty read timeout")
+	}
+
+	return nil
+}
+
+func NewServer(config Config, logger *slog.Logger) *Server {
 	mux := newRouter(logger)
 
 	return &Server{
 		logger: logger,
-		server: &http.Server{Addr: address, Handler: mux},
+		server: &http.Server{ReadTimeout: config.ReadTimeout, Addr: config.Address, Handler: mux},
 	}
 }
 

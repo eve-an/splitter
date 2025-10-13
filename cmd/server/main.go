@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/eve-an/splitter/internal/config"
 	"github.com/eve-an/splitter/internal/http"
 	"github.com/lmittmann/tint"
 )
@@ -22,7 +23,12 @@ func main() {
 		}),
 	))
 
-	server := http.NewServer(":9080", logger)
+	config, err := config.Load()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	server := http.NewServer(config.Addr, logger)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
