@@ -7,13 +7,18 @@ import (
 	"github.com/eve-an/splitter/internal/http/handler"
 )
 
-func newRouter(logger *slog.Logger) http.Handler {
+func NewRouter(
+	logger *slog.Logger,
+	featureHandler *handler.Feature,
+) http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/api/v1/features", handler.ListAllFeatures)
+	mux.HandleFunc("GET /api/v1/features", featureHandler.ListFeatures)
+	mux.HandleFunc("GET /api/v1/features/{id}", featureHandler.GetFeature)
 
 	return chain(mux,
 		recoveryMiddleware(logger), // runs first
+		stripTrailingSlash,
 		withRequestIDMiddleware,
 		loggingMiddleware(logger), // runs last
 	)

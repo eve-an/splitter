@@ -11,6 +11,7 @@ import (
 
 	"github.com/eve-an/splitter/internal/config"
 	"github.com/eve-an/splitter/internal/http"
+	"github.com/eve-an/splitter/internal/http/handler"
 	"github.com/eve-an/splitter/internal/logger"
 	"github.com/joho/godotenv"
 )
@@ -31,7 +32,10 @@ func main() {
 		log.Fatal("Error initializing logger")
 	}
 
-	server := http.NewServer(config.ServerConifg, logger)
+	featureHandler := handler.NewFeatureHandler(logger)
+
+	router := http.NewRouter(logger, featureHandler)
+	server := http.NewServer(config.ServerConifg, logger, router)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)

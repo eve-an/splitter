@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -84,5 +85,24 @@ func withRequestIDMiddleware(next http.Handler) http.Handler {
 		id := uuid.NewString()
 		ctx := context.WithValue(r.Context(), "request_id", id)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func stripTrailingSlash(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" && strings.HasSuffix(r.URL.Path, "/") {
+			newPath := strings.TrimRight(r.URL.Path, "/")
+
+			// Redirect GET requests
+			if r.Method == http.MethodGet {
+				http.Redirect(w, r, newPath, http.StatusMovedPermanently)
+				return
+			}
+
+			// For non-GET, just rewrite the path
+			r.URL.Path = newPath
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }

@@ -30,12 +30,14 @@ func (c Config) Validate() error {
 	return nil
 }
 
-func NewServer(config Config, logger *slog.Logger) *Server {
-	mux := newRouter(logger)
-
+func NewServer(
+	config Config,
+	logger *slog.Logger,
+	handler http.Handler,
+) *Server {
 	return &Server{
 		logger: logger,
-		server: &http.Server{ReadTimeout: config.ReadTimeout, Addr: config.Address, Handler: mux},
+		server: &http.Server{ReadTimeout: config.ReadTimeout, Addr: config.Address, Handler: handler},
 	}
 }
 
