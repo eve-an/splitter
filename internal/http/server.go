@@ -40,12 +40,10 @@ func NewServer(config Config, logger *slog.Logger) *Server {
 }
 
 func (s *Server) Start() {
-	go func() {
-		s.logger.Info("starting server", "address", s.server.Addr)
-		if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.logger.Error("cannot start server", slog.Any("error", err))
-		}
-	}()
+	s.logger.Info("starting server", "address", s.server.Addr)
+	if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		s.logger.Error("cannot start server", slog.Any("error", err))
+	}
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {

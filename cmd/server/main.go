@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -10,30 +11,34 @@ import (
 
 	"github.com/eve-an/splitter/internal/config"
 	"github.com/eve-an/splitter/internal/http"
-	"github.com/lmittmann/tint"
+	"github.com/eve-an/splitter/internal/logger"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	w := os.Stdout
-	logger := slog.New(tint.NewHandler(w, nil))
-	slog.SetDefault(slog.New(
-		tint.NewHandler(w, &tint.Options{
-			Level:      slog.LevelDebug,
-			TimeFormat: time.Kitchen,
-		}),
-	))
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
 	config, err := config.Load()
 	if err != nil {
-		panic(err.Error())
+		log.Fatal("Error loading config")
 	}
 
-	server := http.NewServer(config.Addr, logger)
+	logger, err := logger.NewLogger(config.LogLevel)
+	if err != nil {
+		log.Fatal("Error initializing logger")
+	}
+
+	server := http.NewServer(config.ServerConifg, logger)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
-	server.Start()
+	go func() {
+		server.Start()
+	}()
 
 	<-stop
 	logger.Info("shutdown signal received")
