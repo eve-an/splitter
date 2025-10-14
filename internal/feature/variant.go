@@ -1,6 +1,8 @@
 package feature
 
-import "errors"
+import (
+	"errors"
+)
 
 type Variant struct {
 	Name   string

@@ -1,14 +1,19 @@
 package feature
 
 import (
+	"crypto/md5"
+	"encoding/binary"
 	"errors"
 	"slices"
+	"strconv"
 )
 
 const maximumWeight = 100
 
-var ErrMaximumWeightExceeded = errors.New("maximum weight exceeded")
-var ErrVariantAlreadyExist = errors.New("variant with the same name exist")
+var (
+	ErrMaximumWeightExceeded = errors.New("maximum weight exceeded")
+	ErrVariantAlreadyExist   = errors.New("variant with the same name exist")
+)
 
 type Feature struct {
 	Name         string
@@ -62,4 +67,34 @@ func (f *Feature) Validate() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func featureHashForUser(u *User, f *Feature) uint64 {
+	buf := make([]byte, 8+len(f.Name))
+
+	binary.LittleEndian.PutUint64(buf, uint64(u.ID()))
+	copy(buf[8:], []byte(f.Name))
+
+	sum := md5.Sum(buf)
+	return binary.LittleEndian.Uint64(sum[:8])
+}
+
+// VariantForUser determines the deterministically computed variant assignment for a user
+func VariantForUser(u *User, feature *Feature) *Variant {
+	bucket := uint8(featureHashForUser(u, feature) % 100)
+
+	var cumulative uint8
+	for i, v := range feature.Variants {
+		if v.Weight == 0 {
+			continue
+		}
+
+		cumulative += v.Weight
+
+		if bucket < cumulative || i == len(feature.Variants)-1 {
+			return &v
+		}
+	}
+
+	panic("variants dont add up to " + strconv.FormatInt(maximumWeight, 10))
 }

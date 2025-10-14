@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -9,57 +11,52 @@ import (
 )
 
 type Feature struct {
-	logger *slog.Logger
+	logger     *slog.Logger
+	featureSvc *feature.Service
 }
 
-func NewFeatureHandler(logger *slog.Logger) *Feature {
+func NewFeatureHandler(
+	logger *slog.Logger,
+	featureSvc *feature.Service,
+) *Feature {
 	return &Feature{
 		logger: logger,
 	}
 }
 
 func (f *Feature) ListFeatures(w http.ResponseWriter, r *http.Request) {
-	features := []feature.Feature{
-		{
-			Name:         "red_button",
-			Descritption: "Test wether the new red butto is better than the current green one.",
-			Active:       true,
-			Variants: []feature.Variant{
-				{
-					Name:   "red_button",
-					Weight: 50,
-				},
-				{
-					Name:   "green_button",
-					Weight: 50,
-				},
-			},
-		},
+	featureName := r.URL.Query().Get("feature_name")
+
+	var features []*feature.Feature
+	var err error
+	if featureName != "" {
+		feat, err := f.featureSvc.GetFeatureByName(r.Context(), featureName)
+		if err != nil {
+			f.respondError(w, err, "failed to get feature by name")
+			return
+		}
+		features = []*feature.Feature{feat}
+	} else {
+		features, err = f.featureSvc.ListFeatures(r.Context())
+		if err != nil {
+			f.respondError(w, err, "failed to list features")
+			return
+		}
 	}
 
 	if err := json.NewEncoder(w).Encode(features); err != nil {
-		slog.Error("failed marshalling feature", slog.Any("error", err))
+		f.respondError(w, err, "failed write features")
+		return
 	}
 }
 
-func (f *Feature) GetFeature(w http.ResponseWriter, r *http.Request) {
-	ff := feature.Feature{
-		Name:         "red_button",
-		Descritption: "Test wether the new red butto is better than the current green one.",
-		Active:       true,
-		Variants: []feature.Variant{
-			{
-				Name:   "red_button",
-				Weight: 50,
-			},
-			{
-				Name:   "green_button",
-				Weight: 50,
-			},
-		},
-	}
+func (f *Feature) respondError(w http.ResponseWriter, err error, msg string) {
+	f.logger.Error(msg, "error", err)
 
-	if err := json.NewEncoder(w).Encode(ff); err != nil {
-		slog.Error("failed marshalling feature", slog.Any("error", err))
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		writeError(w, http.StatusGatewayTimeout, "deadline exceeded")
+	default:
+		writeError(w, http.StatusInternalServerError, "unexpected error")
 	}
 }
