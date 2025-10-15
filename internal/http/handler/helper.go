@@ -5,13 +5,13 @@ import (
 	"net/http"
 )
 
-func writeJson(w http.ResponseWriter, code int, data any) {
+func writeJSON(w http.ResponseWriter, code int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(data)
+	json.NewEncoder(w).Encode(data) // nolint: errcheck
 }
 
-func writeError(w http.ResponseWriter, code int, message string, details ...any) {
+func Error(w http.ResponseWriter, code int, message string, details ...any) {
 	errResp := ErrorResponse{
 		Message: message,
 		Details: details,
@@ -21,9 +21,9 @@ func writeError(w http.ResponseWriter, code int, message string, details ...any)
 		errResp.Details = details[0]
 	}
 
-	writeJson(w, code, errResp)
+	writeJSON(w, code, errResp)
 }
 
-func writeJSONOk(w http.ResponseWriter, data any) {
-	writeJson(w, http.StatusOK, data)
+func Ok(w http.ResponseWriter, data any) {
+	writeJSON(w, http.StatusOK, data)
 }

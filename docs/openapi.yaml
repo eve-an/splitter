@@ -1,0 +1,484 @@
+openapi: 3.1.0
+info:
+  title: Splitter API
+  version: 1.0.0
+  description: |
+    HTTP API for managing feature flags, their rollout variants, and the events recorded
+    when users are exposed to those features.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+tags:
+  - name: Features
+    description: Manage feature flags and their variants.
+  - name: Feature Events
+    description: Inspect and record events generated for a specific feature.
+paths:
+  /api/v1/features:
+    get:
+      summary: List features
+      description: Retrieve all registered features with their variants and activation state.
+      operationId: listFeatures
+      tags:
+        - Features
+      responses:
+        "200":
+          description: List of registered features.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Feature"
+              example:
+                - id: 1
+                  name: checkout-button
+                  description: Toggle new checkout button
+                  active: true
+                  variants:
+                    - id: 10
+                      name: control
+                      weight: 50
+                    - id: 11
+                      name: experiment
+                      weight: 50
+                - id: 2
+                  name: recommendations
+                  description: Personalised product recommendations
+                  active: false
+                  variants:
+                    - id: 20
+                      name: disabled
+                      weight: 100
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      summary: Create a feature
+      description: Create a new feature flag and its rollout variants.
+      operationId: createFeature
+      tags:
+        - Features
+      requestBody:
+        description: Feature definition to persist.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeatureRequest"
+            example:
+              name: checkout-button
+              description: Toggle new checkout button
+              active: true
+              variants:
+                - name: control
+                  weight: 50
+                - name: experiment
+                  weight: 50
+      responses:
+        "201":
+          description: Feature was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feature"
+              example:
+                id: 1
+                name: checkout-button
+                description: Toggle new checkout button
+                active: true
+                variants:
+                  - id: 10
+                    name: control
+                    weight: 50
+                  - id: 11
+                    name: experiment
+                    weight: 50
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/features/{featureID}:
+    parameters:
+      - $ref: "#/components/parameters/FeatureId"
+    get:
+      summary: Get a feature
+      description: Retrieve a single feature by its identifier.
+      operationId: getFeature
+      tags:
+        - Features
+      responses:
+        "200":
+          description: Feature details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feature"
+              example:
+                id: 1
+                name: checkout-button
+                description: Toggle new checkout button
+                active: true
+                variants:
+                  - id: 10
+                    name: control
+                    weight: 50
+                  - id: 11
+                    name: experiment
+                    weight: 50
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      summary: Update a feature
+      description: Replace the attributes and variants of an existing feature.
+      operationId: updateFeature
+      tags:
+        - Features
+      requestBody:
+        description: New representation of the feature.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeatureRequest"
+            example:
+              name: checkout-button
+              description: Toggle new checkout button
+              active: false
+              variants:
+                - name: control
+                  weight: 100
+      responses:
+        "200":
+          description: Feature was updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feature"
+              example:
+                id: 1
+                name: checkout-button
+                description: Toggle new checkout button
+                active: false
+                variants:
+                  - id: 10
+                    name: control
+                    weight: 100
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/features/{featureID}/events:
+    parameters:
+      - $ref: "#/components/parameters/FeatureId"
+    get:
+      summary: List feature events
+      description: Return recorded events for the feature ordered by most recent first.
+      operationId: listFeatureEvents
+      tags:
+        - Feature Events
+      responses:
+        "200":
+          description: Events recorded for the feature.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+              example:
+                - id: 100
+                  featureId: 1
+                  userId: user-123
+                  variant: experiment
+                  type: exposure
+                  createdAt: "2024-06-01T12:00:00Z"
+                - id: 101
+                  featureId: 1
+                  userId: user-456
+                  variant: control
+                  type: exposure
+                  createdAt: "2024-06-01T12:05:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      summary: Record a feature event
+      description: Store an event indicating a user interaction with the feature.
+      operationId: recordFeatureEvent
+      tags:
+        - Feature Events
+      requestBody:
+        description: Event payload describing the user interaction.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventRequest"
+            example:
+              userId: user-123
+              variant: experiment
+              type: exposure
+      responses:
+        "201":
+          description: Event was recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+              example:
+                id: 200
+                featureId: 1
+                userId: user-123
+                variant: experiment
+                type: exposure
+                createdAt: "2024-06-01T12:10:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  parameters:
+    FeatureId:
+      name: featureID
+      in: path
+      required: true
+      description: Numeric identifier of the feature.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+  responses:
+    BadRequest:
+      description: Invalid request payload or parameters.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: invalid feature payload
+            details: name is required
+    NotFound:
+      description: Requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: feature not found
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: unexpected error
+            details: internal server error
+  schemas:
+    Feature:
+      type: object
+      description: Feature flag definition including metadata and rollout variants.
+      required:
+        - id
+        - name
+        - active
+        - variants
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          example: checkout-button
+        description:
+          type: string
+          nullable: true
+          example: Toggle new checkout button
+        active:
+          type: boolean
+          example: true
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Variant"
+      example:
+        id: 1
+        name: checkout-button
+        description: Toggle new checkout button
+        active: true
+        variants:
+          - id: 10
+            name: control
+            weight: 50
+          - id: 11
+            name: experiment
+            weight: 50
+    Variant:
+      type: object
+      description: A possible rollout variant for a feature.
+      required:
+        - id
+        - name
+        - weight
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 10
+        name:
+          type: string
+          example: control
+        weight:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+          example: 50
+      example:
+        id: 10
+        name: control
+        weight: 50
+    FeatureRequest:
+      type: object
+      description: Payload used to create or update a feature.
+      required:
+        - name
+        - active
+      properties:
+        name:
+          type: string
+          example: checkout-button
+        description:
+          type: string
+          nullable: true
+          example: Toggle new checkout button
+        active:
+          type: boolean
+          default: true
+          example: true
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/VariantRequest"
+          example:
+            - name: control
+              weight: 50
+            - name: experiment
+              weight: 50
+      example:
+        name: checkout-button
+        description: Toggle new checkout button
+        active: true
+        variants:
+          - name: control
+            weight: 50
+          - name: experiment
+            weight: 50
+    VariantRequest:
+      type: object
+      description: Variant definition supplied when creating or updating a feature.
+      required:
+        - name
+        - weight
+      properties:
+        name:
+          type: string
+          example: control
+        weight:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+          example: 50
+      example:
+        name: control
+        weight: 50
+    Event:
+      type: object
+      description: Recorded feature event (for example, exposure or conversion).
+      required:
+        - id
+        - featureId
+        - type
+        - createdAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 100
+        featureId:
+          type: integer
+          format: int64
+          example: 1
+        userId:
+          type: string
+          nullable: true
+          example: user-123
+        variant:
+          type: string
+          nullable: true
+          example: experiment
+        type:
+          type: string
+          example: exposure
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-06-01T12:00:00Z"
+      example:
+        id: 100
+        featureId: 1
+        userId: user-123
+        variant: experiment
+        type: exposure
+        createdAt: "2024-06-01T12:00:00Z"
+    EventRequest:
+      type: object
+      description: Payload used to store a feature event.
+      required:
+        - type
+      properties:
+        userId:
+          type: string
+          nullable: true
+          example: user-123
+        variant:
+          type: string
+          nullable: true
+          example: experiment
+        type:
+          type: string
+          example: exposure
+      example:
+        userId: user-123
+        variant: experiment
+        type: exposure
+    Error:
+      type: object
+      description: Standard error response envelope.
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: invalid feature id
+        details:
+          description: Additional error information.
+          nullable: true
+          example: provided id must be positive
+      example:
+        message: invalid feature id
+        details: provided id must be positive

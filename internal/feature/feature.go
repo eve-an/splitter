@@ -16,18 +16,29 @@ var (
 )
 
 type Feature struct {
+	ID           int64
 	Name         string
 	Descritption string
 	Active       bool
 	Variants     Variants
 }
 
-func NewFeature(name string, description string, active bool, variants *Variants) (*Feature, error) {
+func NewFeature(
+	name string,
+	description string,
+	active bool,
+	variants *Variants,
+) (*Feature, error) {
+	var variantList Variants
+	if variants != nil {
+		variantList = *variants
+	}
+
 	f := &Feature{
 		Name:         name,
 		Descritption: description,
 		Active:       active,
-		Variants:     *variants,
+		Variants:     variantList,
 	}
 
 	return f, f.Validate()
@@ -42,11 +53,13 @@ func (f *Feature) AddVariant(v *Variant) error {
 		return ErrVariantAlreadyExist
 	}
 
+	f.Variants = append(f.Variants, *v)
+
 	return nil
 }
 
 func (f *Feature) Validate() error {
-	var errs []error
+	var errs []error // nolint: prealloc
 	if f.Name == "" {
 		errs = append(errs, errors.New("name is required"))
 	}

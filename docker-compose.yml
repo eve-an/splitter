@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: splitter_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: splitter
+      POSTGRES_PASSWORD: splitter
+      POSTGRES_DB: splitter
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d # optional: run .sql files on init
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U splitter"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:

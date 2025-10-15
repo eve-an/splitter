@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/eve-an/splitter/internal/config"
+	"github.com/eve-an/splitter/internal/db"
+	"github.com/eve-an/splitter/internal/feature"
 	"github.com/eve-an/splitter/internal/http"
 	"github.com/eve-an/splitter/internal/http/handler"
 	"github.com/eve-an/splitter/internal/logger"
@@ -32,7 +34,19 @@ func main() {
 		log.Fatal("Error initializing logger")
 	}
 
-	featureHandler := handler.NewFeatureHandler(logger)
+	database, err := db.New(config.Database)
+	if err != nil {
+		log.Fatalf("failed to initialize database: %v", err)
+	}
+	defer func(cause error) {
+		logger.Info("database closed", slog.Any("error", cause))
+	}(database.Close())
+
+	featureRepo := feature.NewPostgresFeatureRepository(database)
+	eventRepo := feature.NewPostgresEventRepository(database)
+	featureSvc := feature.NewService(featureRepo, eventRepo)
+
+	featureHandler := handler.NewFeatureHandler(logger, featureSvc)
 
 	router := http.NewRouter(logger, featureHandler)
 	server := http.NewServer(config.ServerConifg, logger, router)

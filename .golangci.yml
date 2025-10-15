@@ -1,0 +1,69 @@
+version: "2"
+
+run:
+  tests: true
+  build-tags:
+    - wireinject
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  enable:
+    - staticcheck
+    - govet
+    - errcheck
+    - ineffassign
+    - unused
+    - gocritic
+    - importas
+    - prealloc
+    - unparam
+    - bodyclose
+    - sqlclosecheck
+    - noctx
+    - nilerr
+    - errorlint
+    - testpackage
+    - testifylint
+
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - "-ST1000"
+
+  exclusions:
+    # presets you can opt in
+    generated: lax
+    presets:
+      - common-false-positives
+
+    # custom exclusion rules for files/folders
+    rules:
+      - path: "(^|/)vendor/|(^|/)node_modules/|(^|/)dist/|(^|/)bin/|(^|/)tmp/"
+        linters:
+          - all
+      - path: "(^|/)(?:mocks?|mockgen|testdata)/"
+        linters:
+          - all
+      - path: '.*\.(pb|pb\.gw|gen|generated|wire_gen)\.go$'
+        linters:
+          - all
+      - path: '_test\.go$'
+        linters:
+          - funlen
+          - gocyclo
+          - cyclop
+          - dupl
+          - wrapcheck
+
+formatters:
+  enable:
+    - gofumpt
+  settings:
+    gofumpt:
+      extra-rules: true
+    golines:
+      max-len: 120

@@ -1,1 +1,6 @@
 .air/
+.tmp/
+.gocache/
+.gomodcache/
+.env
+.DS_STORE/

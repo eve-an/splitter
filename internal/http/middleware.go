@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -10,9 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type middleware func(http.Handler) http.Handler
-
-func chain(h http.Handler, m ...middleware) http.Handler {
+func chain(h http.Handler, m ...func(http.Handler) http.Handler) http.Handler {
 	for i := len(m) - 1; i >= 0; i-- {
 		h = m[i](h)
 	}
@@ -48,9 +45,8 @@ func loggingMiddleware(logger *slog.Logger) func(next http.Handler) http.Handler
 
 			next.ServeHTTP(rw, r)
 
-			requestID := r.Context().Value("request_id").(string)
 			logger.Info("request completed",
-				slog.String("request_id", requestID),
+				slog.String("request_id", requestIDFromContext(r.Context())),
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.Int("status", rw.status),
@@ -66,9 +62,8 @@ func recoveryMiddleware(logger *slog.Logger) func(next http.Handler) http.Handle
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if err := recover(); err != nil {
-					requestID := r.Context().Value("request_id").(string)
 					logger.Error("panic recovered",
-						slog.String("request_id", requestID),
+						slog.String("request_id", requestIDFromContext(r.Context())),
 						slog.Any("error", err),
 						slog.String("path", r.URL.Path),
 					)
@@ -82,8 +77,7 @@ func recoveryMiddleware(logger *slog.Logger) func(next http.Handler) http.Handle
 
 func withRequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := uuid.NewString()
-		ctx := context.WithValue(r.Context(), "request_id", id)
+		ctx := withRequestID(r.Context(), uuid.NewString())
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -1,6 +1,16 @@
-version: '3'
+version: "3"
 
 tasks:
+  db:up:
+    desc: Run Postgres via Docker
+    cmds:
+      - docker compose up -d postgres
+
+  db:down:
+    desc: Stop and remove Postgres container
+    cmds:
+      - docker compose down
+
   build:
     desc: Build the binary
     cmds:
