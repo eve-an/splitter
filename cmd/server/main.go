@@ -38,9 +38,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to initialize database: %v", err)
 	}
-	defer func(cause error) {
-		logger.Info("database closed", slog.Any("error", cause))
-	}(database.Close())
+
+	defer func() {
+		logger.Info("database closed", slog.Any("error", database.Close()))
+	}()
 
 	featureRepo := feature.NewPostgresFeatureRepository(database)
 	eventRepo := feature.NewPostgresEventRepository(database)
