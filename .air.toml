@@ -15,7 +15,7 @@ testdata_dir = ".testdata"
 
   # Watch extensions and folders
   include_ext = ["go", "tpl", "tmpl", "html", "templ"]
-  exclude_dir = ["assets", "tmp", "vendor", "testdata", "migrations", "docker", ".air"]
+  exclude_dir = ["assets", "tmp", "vendor", "testdata", "migrations", "docker", ".air", "frontend"]
 
   # Don’t rerun on unchanged files
   exclude_unchanged = true
