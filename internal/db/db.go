@@ -6,13 +6,17 @@ import (
 	"time"
 
 	"github.com/eve-an/splitter/internal/config"
+	dbsqlc "github.com/eve-an/splitter/internal/db/sqlc"
 
-	_ "github.com/jackc/pgx/stdlib"
-	"github.com/jmoiron/sqlx"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// New opens a PostgreSQL connection using the provided configuration.
-func New(cfg config.DatabaseConfig) (*sqlx.DB, error) {
+type Client struct {
+	Pool    *pgxpool.Pool
+	Queries *dbsqlc.Queries
+}
+
+func New(cfg config.DatabaseConfig) (*Client, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid database config: %w", err)
 	}
@@ -20,24 +24,41 @@ func New(cfg config.DatabaseConfig) (*sqlx.DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	db, err := sqlx.ConnectContext(ctx, "pgx", cfg.URL)
+	poolConfig, err := pgxpool.ParseConfig(cfg.URL)
+	if err != nil {
+		return nil, fmt.Errorf("parse database config: %w", err)
+	}
+
+	if cfg.MaxOpenConns > 0 {
+		poolConfig.MaxConns = int32(cfg.MaxOpenConns)
+	}
+
+	if cfg.MaxIdleConns > 0 {
+		poolConfig.MinConns = int32(cfg.MaxIdleConns)
+	}
+
+	if cfg.ConnMaxLifetime > 0 {
+		poolConfig.MaxConnLifetime = cfg.ConnMaxLifetime
+	} else {
+		poolConfig.MaxConnLifetime = 30 * time.Minute
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, fmt.Errorf("connect to database: %w", err)
 	}
 
-	if cfg.MaxOpenConns > 0 {
-		db.SetMaxOpenConns(cfg.MaxOpenConns)
+	return &Client{
+		Pool:    pool,
+		Queries: dbsqlc.New(pool),
+	}, nil
+}
+
+func (c *Client) Close() error {
+	if c == nil || c.Pool == nil {
+		return nil
 	}
 
-	if cfg.MaxIdleConns > 0 {
-		db.SetMaxIdleConns(cfg.MaxIdleConns)
-	}
-
-	if cfg.ConnMaxLifetime > 0 {
-		db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
-	} else {
-		db.SetConnMaxLifetime(30 * time.Minute)
-	}
-
-	return db, nil
+	c.Pool.Close()
+	return nil
 }

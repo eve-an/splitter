@@ -12,15 +12,16 @@ var (
 )
 
 type FeatureRepository interface {
-	GetByID(ctx context.Context, id int64) (*Feature, error)
+	GetByID(ctx context.Context, id int32) (*Feature, error)
 	List(ctx context.Context) ([]*Feature, error)
 	Create(ctx context.Context, feature *Feature) error
 	Update(ctx context.Context, feature *Feature) error
+	Delete(ctx context.Context, id int32) error
 }
 
 type EventRepository interface {
 	Create(ctx context.Context, event *Event) error
-	ListByFeatureID(ctx context.Context, featureID int64) ([]*Event, error)
+	ListByFeatureID(ctx context.Context, featureID int32) ([]*Event, error)
 }
 
 type Service struct {
@@ -35,7 +36,7 @@ func NewService(featureRepo FeatureRepository, eventRepo EventRepository) *Servi
 	}
 }
 
-func (s *Service) GetFeature(ctx context.Context, id int64) (*Feature, error) {
+func (s *Service) GetFeature(ctx context.Context, id int32) (*Feature, error) {
 	if id <= 0 {
 		return nil, fmt.Errorf("get feature: %w %d", ErrInvalidFeatureID, id)
 	}
@@ -97,7 +98,7 @@ func (s *Service) RecordEvent(ctx context.Context, event *Event) error {
 	return nil
 }
 
-func (s *Service) ListEventsByFeature(ctx context.Context, featureID int64) ([]*Event, error) {
+func (s *Service) ListEventsByFeature(ctx context.Context, featureID int32) ([]*Event, error) {
 	if featureID <= 0 {
 		return nil, fmt.Errorf("list events: %w %d", ErrInvalidFeatureID, featureID)
 	}
@@ -108,4 +109,16 @@ func (s *Service) ListEventsByFeature(ctx context.Context, featureID int64) ([]*
 	}
 
 	return events, nil
+}
+
+func (s *Service) DeleteFeature(ctx context.Context, id int32) error {
+	if id <= 0 {
+		return fmt.Errorf("delete feature: %w %d", ErrInvalidFeatureID, id)
+	}
+
+	if err := s.featureRepo.Delete(ctx, id); err != nil {
+		return fmt.Errorf("delete feature: %w", err)
+	}
+
+	return nil
 }

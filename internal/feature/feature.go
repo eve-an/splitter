@@ -16,7 +16,7 @@ var (
 )
 
 type Feature struct {
-	ID           int64
+	ID           int32
 	Name         string
 	Descritption string
 	Active       bool

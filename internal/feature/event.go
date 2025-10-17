@@ -12,14 +12,14 @@ var (
 
 type Event struct {
 	ID        int64
-	FeatureID int64
+	FeatureID int32
 	UserID    string
 	Variant   string
 	Type      string
 	CreatedAt time.Time
 }
 
-func NewEvent(featureID int64, userID, variant, eventType string) (*Event, error) {
+func NewEvent(featureID int32, userID, variant, eventType string) (*Event, error) {
 	event := &Event{
 		FeatureID: featureID,
 		UserID:    userID,

@@ -43,8 +43,8 @@ func main() {
 		logger.Info("database closed", slog.Any("error", database.Close()))
 	}()
 
-	featureRepo := feature.NewPostgresFeatureRepository(database)
-	eventRepo := feature.NewPostgresEventRepository(database)
+	featureRepo := feature.NewPostgresFeatureRepository(database.Pool, database.Queries)
+	eventRepo := feature.NewPostgresEventRepository(database.Queries)
 	featureSvc := feature.NewService(featureRepo, eventRepo)
 
 	featureHandler := handler.NewFeatureHandler(logger, featureSvc)

@@ -6,96 +6,62 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"time"
 
-	"github.com/jmoiron/sqlx"
+	dbsqlc "github.com/eve-an/splitter/internal/db/sqlc"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var ErrFeatureNotFound = errors.New("feature not found")
-
-type dbFeature struct {
-	FeatureID        int64     `db:"feature_id"`
-	FeatureName      string    `db:"feature_name"`
-	FeatureDesc      string    `db:"feature_description"`
-	FeatureActive    bool      `db:"feature_active"`
-	FeatureCreatedAt time.Time `db:"feature_created_at"`
-	VariantID        int64     `db:"variant_id"`
-	VariantName      string    `db:"variant_name"`
-	VariantWeight    int64     `db:"variant_weight"`
-}
-
-func mapFeature(dbFeature *dbFeature) (*Feature, error) {
-	feature, err := NewFeature(dbFeature.FeatureName, dbFeature.FeatureDesc, dbFeature.FeatureActive, &Variants{})
-	if err != nil {
-		return nil, err
-	}
-
-	feature.ID = dbFeature.FeatureID
-
-	return feature, nil
-}
-
-func mapVariant(dbVariant *dbFeature) (Variant, error) {
-	variant, err := NewVariant(dbVariant.VariantName, uint8(dbVariant.VariantWeight))
-	if err != nil {
-		return Variant{}, err
-	}
-
-	variant.ID = dbVariant.VariantID
-
-	return variant, nil
-}
+var (
+	ErrFeatureNotFound      = errors.New("feature not found")
+	ErrFeatureAlreadyExists = errors.New("feature already exists")
+)
 
 type postgresFeatureRepository struct {
-	db *sqlx.DB
+	pool    *pgxpool.Pool
+	queries *dbsqlc.Queries
 }
 
 var _ FeatureRepository = (*postgresFeatureRepository)(nil)
 
-func NewPostgresFeatureRepository(db *sqlx.DB) *postgresFeatureRepository {
-	return &postgresFeatureRepository{db: db}
+func NewPostgresFeatureRepository(pool *pgxpool.Pool, queries *dbsqlc.Queries) *postgresFeatureRepository {
+	return &postgresFeatureRepository{
+		pool:    pool,
+		queries: queries,
+	}
 }
 
 func (p *postgresFeatureRepository) List(ctx context.Context) ([]*Feature, error) {
-	query := `
-		SELECT
-			f.id          AS feature_id,
-			f.name        AS feature_name,
-			f.description AS feature_description,
-			f.active      AS feature_active,
-			f.created_at  AS feature_created_at,
-			v.id          AS variant_id,
-			v.name        AS variant_name,
-			v.weight      AS variant_weight
-		FROM features f
-		LEFT JOIN variants v ON f.id = v.feature_id;`
-
-	rows := []dbFeature{}
-	if err := p.db.SelectContext(ctx, &rows, query); err != nil {
+	rows, err := p.queries.ListFeatures(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("selecting features: %w", err)
 	}
 
-	var err error
-	featureMap := make(map[int64]*Feature, len(rows))
+	featureMap := make(map[int32]*Feature, len(rows))
 	for _, r := range rows {
 		f, ok := featureMap[r.FeatureID]
 		if !ok {
-			f, err = mapFeature(&r)
+			f, err = mapFeatureRow(r.FeatureID, r.FeatureName, r.FeatureDescription, r.FeatureActive)
 			if err != nil {
 				return nil, fmt.Errorf("mapping feature: %w", err)
 			}
 			featureMap[r.FeatureID] = f
 		}
 
-		if r.VariantID != 0 {
-			variant, err := mapVariant(&r)
-			if err != nil {
-				return nil, fmt.Errorf("mapping variant: %w", err)
-			}
+		if !r.VariantID.Valid || !r.VariantName.Valid {
+			continue
+		}
 
-			if err := f.AddVariant(&variant); err != nil {
-				return nil, fmt.Errorf("adding variant to feature: %w", err)
-			}
+		variant, err := mapVariantRow(r.VariantID, r.VariantName, r.VariantWeight)
+		if err != nil {
+			return nil, fmt.Errorf("mapping variant: %w", err)
+		}
+
+		if err := f.AddVariant(&variant); err != nil {
+			return nil, fmt.Errorf("adding variant to feature: %w", err)
 		}
 	}
 
@@ -103,23 +69,9 @@ func (p *postgresFeatureRepository) List(ctx context.Context) ([]*Feature, error
 }
 
 // GetByID implements FeatureRepository.
-func (p *postgresFeatureRepository) GetByID(ctx context.Context, id int64) (*Feature, error) {
-	query := `
-		SELECT
-			f.id          AS feature_id,
-			f.name        AS feature_name,
-			f.description AS feature_description,
-			f.active      AS feature_active,
-			f.created_at  AS feature_created_at,
-			v.id          AS variant_id,
-			v.name        AS variant_name,
-			v.weight      AS variant_weight
-		FROM features f
-		LEFT JOIN variants v ON f.id = v.feature_id
-		WHERE f.id = $1;`
-
-	rows := []dbFeature{}
-	if err := p.db.SelectContext(ctx, &rows, query, id); err != nil {
+func (p *postgresFeatureRepository) GetByID(ctx context.Context, id int32) (*Feature, error) {
+	rows, err := p.queries.GetFeature(ctx, id)
+	if err != nil {
 		return nil, fmt.Errorf("selecting feature by id: %w", err)
 	}
 
@@ -127,28 +79,33 @@ func (p *postgresFeatureRepository) GetByID(ctx context.Context, id int64) (*Fea
 		return nil, ErrFeatureNotFound
 	}
 
-	var err error
-	featureMap := make(map[int64]*Feature)
+	featureMap := make(map[int32]*Feature)
 	for _, r := range rows {
 		f, ok := featureMap[r.FeatureID]
 		if !ok {
-			f, err = mapFeature(&r)
+			f, err = mapFeatureRow(r.FeatureID, r.FeatureName, r.FeatureDescription, r.FeatureActive)
 			if err != nil {
 				return nil, fmt.Errorf("mapping feature: %w", err)
 			}
 			featureMap[r.FeatureID] = f
 		}
 
-		if r.VariantID != 0 {
-			variant, err := mapVariant(&r)
-			if err != nil {
-				return nil, fmt.Errorf("mapping variant: %w", err)
-			}
-
-			if err := f.AddVariant(&variant); err != nil {
-				return nil, fmt.Errorf("adding variant to feature: %w", err)
-			}
+		if !r.VariantID.Valid || !r.VariantName.Valid {
+			continue
 		}
+
+		variant, err := mapVariantRow(r.VariantID, r.VariantName, r.VariantWeight)
+		if err != nil {
+			return nil, fmt.Errorf("mapping variant: %w", err)
+		}
+
+		if err := f.AddVariant(&variant); err != nil {
+			return nil, fmt.Errorf("adding variant to feature: %w", err)
+		}
+	}
+
+	if len(featureMap) == 0 {
+		return nil, ErrFeatureNotFound
 	}
 
 	for _, feature := range featureMap {
@@ -160,36 +117,46 @@ func (p *postgresFeatureRepository) GetByID(ctx context.Context, id int64) (*Fea
 
 // Create implements FeatureRepository.
 func (p *postgresFeatureRepository) Create(ctx context.Context, feature *Feature) error {
-	tx, err := p.db.BeginTxx(ctx, nil)
+	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() { _ = tx.Rollback(ctx) }()
 
-	var featureID int64
-	query := `
-		INSERT INTO features (name, description, active)
-		VALUES ($1, $2, $3)
-		RETURNING id`
+	queries := p.queries.WithTx(tx)
 
-	if err := tx.GetContext(ctx, &featureID, query, feature.Name, feature.Descritption, feature.Active); err != nil {
+	featureID, err := queries.InsertFeature(ctx, dbsqlc.InsertFeatureParams{
+		Name:        feature.Name,
+		Description: textParam(feature.Descritption),
+		Active:      feature.Active,
+	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrFeatureAlreadyExists
+		}
+
 		return fmt.Errorf("inserting feature: %w", err)
 	}
 	feature.ID = featureID
+	featureIDParam := pgInt4FromInt32(featureID)
 
 	for i := range feature.Variants {
 		variant := &feature.Variants[i]
-		variantQuery := `
-			INSERT INTO variants (feature_id, name, weight)
-			VALUES ($1, $2, $3)
-			RETURNING id`
 
-		if err := tx.GetContext(ctx, &variant.ID, variantQuery, featureID, variant.Name, variant.Weight); err != nil {
+		variantID, err := queries.InsertVariant(ctx, dbsqlc.InsertVariantParams{
+			FeatureID: featureIDParam,
+			Name:      variant.Name,
+			Weight:    int32(variant.Weight),
+		})
+		if err != nil {
 			return fmt.Errorf("inserting variant %s: %w", variant.Name, err)
 		}
+
+		variant.ID = variantID
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 
@@ -197,42 +164,148 @@ func (p *postgresFeatureRepository) Create(ctx context.Context, feature *Feature
 }
 
 // Update implements FeatureRepository.
-func (p *postgresFeatureRepository) Update(ctx context.Context, feature *Feature) error {
-	tx, err := p.db.BeginTxx(ctx, nil)
+func (p *postgresFeatureRepository) Update(ctx context.Context, feature *Feature) (err error) {
+	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{})
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
 
-	updateFeatureQuery := `
-		UPDATE features
-		SET name = $1, description = $2, active = $3
-		WHERE id = $4`
+	queries := p.queries.WithTx(tx)
 
-	if _, err := tx.ExecContext(ctx, updateFeatureQuery, feature.Name, feature.Descritption, feature.Active, feature.ID); err != nil {
+	if err := queries.UpdateFeature(ctx, dbsqlc.UpdateFeatureParams{
+		Name:        feature.Name,
+		Description: textParam(feature.Descritption),
+		Active:      feature.Active,
+		ID:          feature.ID,
+	}); err != nil {
 		return fmt.Errorf("updating feature: %w", err)
 	}
 
-	deleteVariantsQuery := `DELETE FROM variants WHERE feature_id = $1`
-	if _, err := tx.ExecContext(ctx, deleteVariantsQuery, feature.ID); err != nil {
+	if err := queries.DeleteVariantsByFeature(ctx, pgInt4FromInt32(feature.ID)); err != nil {
 		return fmt.Errorf("deleting existing variants: %w", err)
 	}
 
+	featureIDParam := pgInt4FromInt32(feature.ID)
 	for i := range feature.Variants {
 		variant := &feature.Variants[i]
-		variantQuery := `
-			INSERT INTO variants (feature_id, name, weight)
-			VALUES ($1, $2, $3)
-			RETURNING id`
 
-		if err := tx.GetContext(ctx, &variant.ID, variantQuery, feature.ID, variant.Name, variant.Weight); err != nil {
+		variantID, err := queries.InsertVariant(ctx, dbsqlc.InsertVariantParams{
+			FeatureID: featureIDParam,
+			Name:      variant.Name,
+			Weight:    int32(variant.Weight),
+		})
+		if err != nil {
 			return fmt.Errorf("inserting variant %s: %w", variant.Name, err)
 		}
+
+		variant.ID = variantID
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 
 	return nil
+}
+
+func (r *postgresFeatureRepository) Delete(ctx context.Context, id int32) (err error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+
+	queries := r.queries.WithTx(tx)
+
+	if err := queries.DeleteVariantsByFeature(ctx, pgInt4FromInt32(id)); err != nil {
+		return fmt.Errorf("deleting existing variants: %w", err)
+	}
+
+	if err := queries.DeleteFeature(ctx, id); err != nil {
+		return fmt.Errorf("deleting feature: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+func mapFeatureRow(id int32, name string, description pgtype.Text, active bool) (*Feature, error) {
+	feature, err := NewFeature(name, textToString(description), active, &Variants{})
+	if err != nil {
+		return nil, err
+	}
+
+	feature.ID = id
+
+	return feature, nil
+}
+
+func mapVariantRow(id pgtype.Int4, name pgtype.Text, weight pgtype.Int4) (Variant, error) {
+	if !id.Valid {
+		return Variant{}, errors.New("variant id is null")
+	}
+	if !name.Valid {
+		return Variant{}, errors.New("variant name is null")
+	}
+	if !weight.Valid {
+		return Variant{}, errors.New("variant weight is null")
+	}
+
+	converted, err := uint8FromInt32(weight.Int32)
+	if err != nil {
+		return Variant{}, err
+	}
+
+	variant, err := NewVariant(name.String, converted)
+	if err != nil {
+		return Variant{}, err
+	}
+
+	variant.ID = id.Int32
+
+	return variant, nil
+}
+
+func textToString(value pgtype.Text) string {
+	if !value.Valid {
+		return ""
+	}
+
+	return value.String
+}
+
+func textParam(value string) pgtype.Text {
+	return pgtype.Text{
+		String: value,
+		Valid:  true,
+	}
+}
+
+func uint8FromInt32(value int32) (uint8, error) {
+	if value < 0 || value > 255 {
+		return 0, fmt.Errorf("value %d cannot be represented as uint8", value)
+	}
+
+	return uint8(value), nil
+}
+
+func pgInt4FromInt32(value int32) pgtype.Int4 {
+	return pgtype.Int4{
+		Int32: value,
+		Valid: true,
+	}
 }

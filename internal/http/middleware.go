@@ -46,7 +46,7 @@ func loggingMiddleware(logger *slog.Logger) func(next http.Handler) http.Handler
 			next.ServeHTTP(rw, r)
 
 			logger.Info("request completed",
-				slog.String("request_id", requestIDFromContext(r.Context())),
+				slog.String("trace_id", traceIDFromContext(r.Context())),
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.Int("status", rw.status),
@@ -63,7 +63,7 @@ func recoveryMiddleware(logger *slog.Logger) func(next http.Handler) http.Handle
 			defer func() {
 				if err := recover(); err != nil {
 					logger.Error("panic recovered",
-						slog.String("request_id", requestIDFromContext(r.Context())),
+						slog.String("trace_id", traceIDFromContext(r.Context())),
 						slog.Any("error", err),
 						slog.String("path", r.URL.Path),
 					)
@@ -75,9 +75,9 @@ func recoveryMiddleware(logger *slog.Logger) func(next http.Handler) http.Handle
 	}
 }
 
-func withRequestIDMiddleware(next http.Handler) http.Handler {
+func withTraceIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := withRequestID(r.Context(), uuid.NewString())
+		ctx := withTraceID(r.Context(), uuid.NewString())
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -95,6 +95,21 @@ func stripTrailingSlash(next http.Handler) http.Handler {
 
 			// For non-GET, just rewrite the path
 			r.URL.Path = newPath
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*") // todo: dont allow all origins
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
 		}
 
 		next.ServeHTTP(w, r)

@@ -5,7 +5,7 @@ import (
 )
 
 type Variant struct {
-	ID     int64
+	ID     int32
 	Name   string
 	Weight uint8
 }

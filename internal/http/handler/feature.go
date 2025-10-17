@@ -34,7 +34,12 @@ func (f *Feature) ListFeatures(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	Ok(w, features)
+	apiFeatures := make([]featureResponse, len(features))
+	for i, feature := range features {
+		apiFeatures[i] = mapFeatureResponse(feature)
+	}
+
+	Ok(w, apiFeatures)
 }
 
 func (f *Feature) GetFeature(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +103,20 @@ func (f *Feature) UpdateFeature(w http.ResponseWriter, r *http.Request) {
 	Ok(w, domainFeature)
 }
 
+func (f *Feature) DeleteFeature(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseFeatureID(w, r)
+	if !ok {
+		return
+	}
+
+	if err := f.featureSvc.DeleteFeature(r.Context(), id); err != nil {
+		f.respondError(w, err, fmt.Sprintf("failed to delete feature %d", id))
+		return
+	}
+
+	Ok(w, nil)
+}
+
 func (f *Feature) ListFeatureEvents(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseFeatureID(w, r)
 	if !ok {
@@ -147,10 +166,12 @@ func (f *Feature) respondError(w http.ResponseWriter, err error, msg string) {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
 		Error(w, http.StatusGatewayTimeout, "deadline exceeded")
-	case errors.Is(err, feature.ErrMaximumWeightExceeded),
+	case
+		errors.Is(err, feature.ErrMaximumWeightExceeded),
 		errors.Is(err, feature.ErrVariantAlreadyExist),
 		errors.Is(err, feature.ErrEventFeatureIDRequired),
-		errors.Is(err, feature.ErrEventTypeRequired):
+		errors.Is(err, feature.ErrEventTypeRequired),
+		errors.Is(err, feature.ErrFeatureAlreadyExists):
 		Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, feature.ErrFeatureNotFound):
 		Error(w, http.StatusNotFound, "feature not found")
@@ -163,20 +184,20 @@ func (f *Feature) respondError(w http.ResponseWriter, err error, msg string) {
 	}
 }
 
-func parseFeatureID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+func parseFeatureID(w http.ResponseWriter, r *http.Request) (int32, bool) {
 	featureIDValue := r.PathValue("featureID")
 	if featureIDValue == "" {
 		Error(w, http.StatusBadRequest, "missing feature id")
 		return 0, false
 	}
 
-	id, err := strconv.ParseInt(featureIDValue, 10, 64)
+	id, err := strconv.ParseInt(featureIDValue, 10, 32)
 	if err != nil || id <= 0 {
 		Error(w, http.StatusBadRequest, "invalid feature id", featureIDValue)
 		return 0, false
 	}
 
-	return id, true
+	return int32(id), true
 }
 
 func decodeFeatureRequest(w http.ResponseWriter, r *http.Request) (*featureRequest, bool) {
@@ -189,22 +210,4 @@ func decodeFeatureRequest(w http.ResponseWriter, r *http.Request) (*featureReque
 	}
 
 	return &req, true
-}
-
-func buildFeatureFromRequest(req *featureRequest) (*feature.Feature, error) {
-	variants := make([]feature.Variant, 0, len(req.Variants))
-	for _, v := range req.Variants {
-		variant, err := feature.NewVariant(v.Name, v.Weight)
-		if err != nil {
-			return nil, err
-		}
-		variants = append(variants, variant)
-	}
-
-	domainVariants, err := feature.NewVariants(variants...)
-	if err != nil {
-		return nil, err
-	}
-
-	return feature.NewFeature(req.Name, req.Description, req.Active, &domainVariants)
 }
