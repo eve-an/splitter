@@ -82,6 +82,10 @@ func (f *Feature) Validate() error {
 	return errors.Join(errs...)
 }
 
+func (f *Feature) Hash() string {
+	return strconv.FormatInt(int64(f.ID), 10)
+}
+
 func featureHashForUser(u *User, f *Feature) uint64 {
 	buf := make([]byte, 8+len(f.Name))
 

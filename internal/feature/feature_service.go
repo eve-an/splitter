@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/eve-an/splitter/internal/cache"
 )
 
 var (
@@ -25,26 +29,35 @@ type EventRepository interface {
 }
 
 type Service struct {
-	featureRepo FeatureRepository
-	eventRepo   EventRepository
+	featureRepo  FeatureRepository
+	featureCache cache.Cache[*Feature]
+	eventRepo    EventRepository
 }
 
-func NewService(featureRepo FeatureRepository, eventRepo EventRepository) *Service {
+func NewService(
+	featureRepo FeatureRepository,
+	eventRepo EventRepository,
+	featureCache cache.Cache[*Feature],
+) *Service {
 	return &Service{
-		featureRepo: featureRepo,
-		eventRepo:   eventRepo,
+		featureRepo:  featureRepo,
+		featureCache: featureCache,
+		eventRepo:    eventRepo,
 	}
 }
 
 func (s *Service) GetFeature(ctx context.Context, id int32) (*Feature, error) {
-	if id <= 0 {
-		return nil, fmt.Errorf("get feature: %w %d", ErrInvalidFeatureID, id)
+	featureKey := strconv.Itoa(int(id))
+	if feature, ok := s.featureCache.Get(featureKey); ok {
+		return feature, nil
 	}
 
 	feature, err := s.featureRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get feature: %w", err)
 	}
+
+	s.featureCache.Set(featureKey, feature, 1*time.Minute)
 
 	return feature, nil
 }
@@ -71,10 +84,6 @@ func (s *Service) CreateFeature(ctx context.Context, feature *Feature) error {
 }
 
 func (s *Service) UpdateFeature(ctx context.Context, feature *Feature) error {
-	if feature.ID <= 0 {
-		return fmt.Errorf("update feature: %w %d", ErrInvalidFeatureID, feature.ID)
-	}
-
 	if err := feature.Validate(); err != nil {
 		return fmt.Errorf("validate feature: %w", err)
 	}
@@ -99,10 +108,6 @@ func (s *Service) RecordEvent(ctx context.Context, event *Event) error {
 }
 
 func (s *Service) ListEventsByFeature(ctx context.Context, featureID int32) ([]*Event, error) {
-	if featureID <= 0 {
-		return nil, fmt.Errorf("list events: %w %d", ErrInvalidFeatureID, featureID)
-	}
-
 	events, err := s.eventRepo.ListByFeatureID(ctx, featureID)
 	if err != nil {
 		return nil, fmt.Errorf("list events: %w", err)
@@ -112,10 +117,6 @@ func (s *Service) ListEventsByFeature(ctx context.Context, featureID int32) ([]*
 }
 
 func (s *Service) DeleteFeature(ctx context.Context, id int32) error {
-	if id <= 0 {
-		return fmt.Errorf("delete feature: %w %d", ErrInvalidFeatureID, id)
-	}
-
 	if err := s.featureRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("delete feature: %w", err)
 	}
