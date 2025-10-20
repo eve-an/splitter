@@ -1,0 +1,3 @@
+api.ivankloeckner.com {
+    reverse_proxy splitter:8080
+}

@@ -11,6 +11,32 @@ tasks:
     cmds:
       - docker compose down
 
+  docker:build:
+    desc: Builds the docker image and assings latest tag
+    cmds:
+      - docker build -t splitter:latest .
+
+  docker:run:
+    desc: Runs the latest docker image
+    cmds:
+      - docker run -p 8080:8080 eveann/splitter:latest
+
+  docker:push:
+    desc: Pushes the image to registry
+    cmds:
+      - docker tag eveann/splitter:latest eveann/splitter:latest
+      - docker push ivankloeckner/splitter:latest
+
+  ansible:playbook:
+    desc: Executes the playbook
+    cmds:
+      - ansible-playbook -i ansible/inventory.yaml ansible/server.yaml
+
+  ansible:ping:
+    desc: Pings the servers
+    cmds:
+      - ansible -i ansible/inventory.yaml all -m ping
+
   build:
     desc: Build the binary
     cmds:

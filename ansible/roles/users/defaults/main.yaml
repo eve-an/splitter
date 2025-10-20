@@ -1,0 +1,10 @@
+---
+# Define system users managed by Ansible. Example structure:
+system_users:
+  - name: ivan
+    comment: Primary administrator
+    groups: [sudo]
+    ssh_public_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID8p2LN58SsDQ8LlAWUioo5h9h7m6WxKRxPii6nhm/4b iv.cygankov@gmail.com"
+    passwordless_sudo: true
+    state: present

@@ -1,0 +1,61 @@
+---
+- name: Validate system user input
+  ansible.builtin.assert:
+    that:
+      - system_users is iterable
+    fail_msg: "system_users must be a list of user definitions."
+
+- name: Collect declared groups
+  ansible.builtin.set_fact:
+    managed_groups: "{{ system_users | map(attribute='groups') | reject('undefined') | list | flatten | unique }}"
+
+- name: Ensure declared groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ managed_groups }}"
+  when: managed_groups | length > 0
+
+- name: Ensure system users are present
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    comment: "{{ item.comment | default(omit) }}"
+    groups: "{{ item.groups | default([]) }}"
+    append: true
+    shell: "{{ item.shell | default('/bin/bash') }}"
+    state: "{{ item.state | default('present') }}"
+    create_home: "{{ item.create_home | default(true) }}"
+  loop: "{{ system_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Configure SSH authorized keys
+  ansible.builtin.authorized_key:
+    user: "{{ item.0.name }}"
+    key: "{{ item.1 }}"
+    state: present
+    manage_dir: true
+  loop: "{{ system_users | subelements('ssh_public_keys', skip_missing=True) }}"
+  loop_control:
+    label: "{{ item.0.name }}"
+
+- name: Configure passwordless sudo policies
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ item.name }}"
+    content: "{{ item.name }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+  loop: "{{ system_users | selectattr('passwordless_sudo', 'defined') | selectattr('passwordless_sudo') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Remove sudoers entries when passwordless sudo disabled
+  ansible.builtin.file:
+    path: "/etc/sudoers.d/{{ item.name }}"
+    state: absent
+  loop: "{{ system_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not item.passwordless_sudo | default(false)

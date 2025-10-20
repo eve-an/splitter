@@ -1,0 +1,56 @@
+---
+- name: Ensure application directory exists
+  ansible.builtin.file:
+    path: "{{ app_project_root }}"
+    state: directory
+    owner: "{{ app_runtime_user }}"
+    group: "{{ app_runtime_group }}"
+    mode: "0755"
+
+- name: Sync project files to remote host
+  ansible.posix.synchronize:
+    src: "{{ app_local_source_path }}/"
+    dest: "{{ app_project_root }}/"
+    delete: true
+    recursive: true
+    rsync_opts: "{{ app_sync_excludes | map('regex_replace', '^(.*)$', '--exclude=\\1') | list }}"
+
+- name: Ensure project files owned by runtime user
+  ansible.builtin.file:
+    path: "{{ app_project_root }}"
+    state: directory
+    recurse: true
+    owner: "{{ app_runtime_user }}"
+    group: "{{ app_runtime_group }}"
+
+- name: Render docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ app_project_root }}/docker-compose.yml"
+    owner: "{{ app_runtime_user }}"
+    group: "{{ app_runtime_group }}"
+    mode: "0644"
+
+- name: Render application environment file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_project_root }}/.env"
+    owner: "{{ app_runtime_user }}"
+    group: "{{ app_runtime_group }}"
+    mode: "0600"
+
+- name: Build API image on remote
+  become_user: "{{ app_runtime_user }}"
+  community.docker.docker_image:
+    name: splitter
+    build:
+      path: "{{ app_project_root }}"
+    source: build
+
+- name: Recreate stack gracefully
+  become_user: "{{ app_runtime_user }}"
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_project_root }}"
+    state: present
+    recreate: auto
+    remove_orphans: true

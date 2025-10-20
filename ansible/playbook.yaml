@@ -1,0 +1,10 @@
+---
+- name: Deploy API stack with Caddy and PostgreSQL
+  hosts: contabo
+  become: true
+
+  roles:
+    - system
+    - users
+    - docker
+    - app

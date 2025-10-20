@@ -1,4 +1,29 @@
 services:
+  caddy:
+    image: caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - backend
+
+  splitter:
+    image: docker.io/library/splitter:latest
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    networks:
+        - backend
+
   postgres:
     image: postgres:18
     container_name: splitter_postgres
@@ -7,8 +32,6 @@ services:
       POSTGRES_USER: splitter
       POSTGRES_PASSWORD: splitter
       POSTGRES_DB: splitter
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d # optional: run .sql files on init
@@ -17,6 +40,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+        - backend
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  backend:
+    driver: bridge
+

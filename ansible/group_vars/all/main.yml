@@ -1,0 +1,32 @@
+---
+# Configure managed system users. Populate the SSH keys with real values or
+# reference entries stored in ansible-vault (e.g. vault_ivan_public_key).
+system_users:
+  - name: ivan
+    comment: "Primary administrator"
+    groups: [sudo]
+    passwordless_sudo: true
+    ssh_public_keys: []
+  - name: deploy
+    comment: "Automation deployment user"
+    groups: [sudo, docker]
+    passwordless_sudo: true
+    ssh_public_keys: []
+  - name: splitter
+    comment: "Container runtime user"
+    groups: [docker]
+    passwordless_sudo: false
+    ssh_public_keys: []
+
+# Application deployment settings
+app_project_root: /opt/splitter
+app_runtime_user: splitter
+app_runtime_group: splitter
+app_local_source_path: "{{ playbook_dir | dirname }}"
+app_sync_excludes:
+  - frontend/
+  - .git/
+  - node_modules/
+  - .env
+  - ansible/
+  - "*.md"
