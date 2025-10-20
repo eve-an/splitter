@@ -9,12 +9,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/eve-an/splitter/internal/cache"
 	"github.com/eve-an/splitter/internal/config"
 	"github.com/eve-an/splitter/internal/db"
 	"github.com/eve-an/splitter/internal/feature"
 	"github.com/eve-an/splitter/internal/http"
 	"github.com/eve-an/splitter/internal/http/handler"
 	"github.com/eve-an/splitter/internal/logger"
+	"github.com/eve-an/splitter/internal/session"
 	"github.com/joho/godotenv"
 )
 
@@ -26,7 +28,7 @@ func main() {
 
 	config, err := config.Load()
 	if err != nil {
-		log.Fatal("Error loading config")
+		log.Fatalf("Error loading config: %s", err.Error())
 	}
 
 	logger, err := logger.NewLogger(config.LogLevel)
@@ -44,12 +46,16 @@ func main() {
 	}()
 
 	featureRepo := feature.NewPostgresFeatureRepository(database.Pool, database.Queries)
+	featureCache := cache.NewMemoryCache[*feature.Feature](time.Minute)
+
 	eventRepo := feature.NewPostgresEventRepository(database.Queries)
-	featureSvc := feature.NewService(featureRepo, eventRepo)
+	featureSvc := feature.NewService(featureRepo, eventRepo, featureCache)
 
 	featureHandler := handler.NewFeatureHandler(logger, featureSvc)
 
-	router := http.NewRouter(logger, featureHandler)
+	sessionSvc := session.NewService(time.Hour * 12)
+
+	router := http.NewRouter(logger, featureHandler, sessionSvc, config.DefaultAuth) // TODO: support multi user auth
 	server := http.NewServer(config.ServerConifg, logger, router)
 
 	stop := make(chan os.Signal, 1)

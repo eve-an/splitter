@@ -1,11 +1,14 @@
 package http
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/eve-an/splitter/internal/config"
 	"github.com/google/uuid"
 )
 
@@ -114,4 +117,34 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func authMiddleware(credentials config.Auth) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			username, password, ok := r.BasicAuth()
+			if !ok {
+				w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+				http.Error(w, "Missing or invalid credentials", http.StatusUnauthorized)
+				return
+			}
+
+			usernameHash := sha256.Sum256([]byte(username))
+			passwordHash := sha256.Sum256([]byte(password))
+			expectedUsernameHash := sha256.Sum256([]byte(credentials.Username))
+			expectedPasswordHash := sha256.Sum256([]byte(credentials.Password))
+
+			usernameMatch := (subtle.ConstantTimeCompare(usernameHash[:], expectedUsernameHash[:]) == 1)
+			passwordMatch := (subtle.ConstantTimeCompare(passwordHash[:], expectedPasswordHash[:]) == 1)
+
+			if !usernameMatch || !passwordMatch {
+				w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+				http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+				return
+
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }

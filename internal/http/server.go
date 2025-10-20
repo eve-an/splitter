@@ -5,7 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"time"
+
+	"github.com/eve-an/splitter/internal/config"
 )
 
 type Server struct {
@@ -13,25 +14,8 @@ type Server struct {
 	server *http.Server
 }
 
-type Config struct {
-	Address     string
-	ReadTimeout time.Duration
-}
-
-func (c Config) Validate() error {
-	if c.Address == "" {
-		return errors.New("empty server address")
-	}
-
-	if c.ReadTimeout == 0 {
-		return errors.New("empty read timeout")
-	}
-
-	return nil
-}
-
 func NewServer(
-	config Config,
+	config config.Server,
 	logger *slog.Logger,
 	handler http.Handler,
 ) *Server {

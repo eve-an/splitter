@@ -4,12 +4,16 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/eve-an/splitter/internal/config"
 	"github.com/eve-an/splitter/internal/http/handler"
+	"github.com/eve-an/splitter/internal/session"
 )
 
 func NewRouter(
 	logger *slog.Logger,
 	featureHandler *handler.Feature,
+	sessionSvc *session.Service,
+	authConfig config.Auth,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -26,6 +30,7 @@ func NewRouter(
 		stripTrailingSlash,
 		withTraceIDMiddleware,
 		loggingMiddleware(logger),
-		corsMiddleware, // runs last
+		corsMiddleware,
+		authMiddleware(authConfig), // runs last
 	)
 }

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"os"
 	"time"
-
-	"github.com/eve-an/splitter/internal/http"
 )
 
 type DatabaseConfig struct {
@@ -35,8 +33,9 @@ func (c DatabaseConfig) Validate() error {
 
 type Config struct {
 	LogLevel     string
-	ServerConifg http.Config
+	ServerConifg Server
 	Database     DatabaseConfig
+	DefaultAuth  Auth
 }
 
 func (c Config) Validate() error {
@@ -48,6 +47,7 @@ func (c Config) Validate() error {
 
 	errs = append(errs, c.ServerConifg.Validate())
 	errs = append(errs, c.Database.Validate())
+	errs = append(errs, c.DefaultAuth.Validate())
 
 	return errors.Join(errs...)
 }
@@ -67,6 +67,14 @@ func Load() (c Config, err error) {
 
 	if dbURL := os.Getenv("SPLITTER_DB_URL"); dbURL != "" {
 		c.Database.URL = dbURL
+	}
+
+	if dbURL := os.Getenv("SPLITTER_AUTH_USERNAME"); dbURL != "" {
+		c.DefaultAuth.Username = dbURL
+	}
+
+	if dbURL := os.Getenv("SPLITTER_AUTH_PASSWORD"); dbURL != "" {
+		c.DefaultAuth.Password = dbURL
 	}
 
 	return c, c.Validate()
