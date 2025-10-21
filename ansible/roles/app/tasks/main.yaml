@@ -46,6 +46,7 @@
     build:
       path: "{{ app_project_root }}"
     source: build
+    force_source: true
 
 - name: Recreate stack gracefully
   become_user: "{{ app_runtime_user }}"

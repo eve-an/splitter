@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
-
-	"github.com/lmittmann/tint"
 )
 
 func parseLogLevel(logLevel string) (slog.Level, error) {
@@ -30,12 +27,9 @@ func NewLogger(logLevel string) (*slog.Logger, error) {
 		return slog.Default(), err
 	}
 
-	logger := slog.New(
-		tint.NewHandler(os.Stdout, &tint.Options{
-			Level:      slogLevel,
-			TimeFormat: time.Kitchen,
-		}),
-	)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slogLevel,
+	}))
 
 	slog.SetDefault(logger)
 

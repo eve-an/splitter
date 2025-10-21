@@ -27,15 +27,9 @@ tasks:
       - docker tag eveann/splitter:latest eveann/splitter:latest
       - docker push ivankloeckner/splitter:latest
 
-  ansible:playbook:
-    desc: Executes the playbook
+  deploy:
     cmds:
-      - ansible-playbook -i ansible/inventory.yaml ansible/server.yaml
-
-  ansible:ping:
-    desc: Pings the servers
-    cmds:
-      - ansible -i ansible/inventory.yaml all -m ping
+      - ansible-playbook -i ansible/inventory.ini ansible/playbook.yaml --ask-vault-pass
 
   build:
     desc: Build the binary
