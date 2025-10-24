@@ -1,7 +1,0 @@
-api.ivankloeckner.com {
-    reverse_proxy splitter:8080
-}
-
-grafana.ivankloeckner.com {
-    reverse_proxy splitter:3000
-}

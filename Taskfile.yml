@@ -1,16 +1,6 @@
 version: "3"
 
 tasks:
-  db:up:
-    desc: Run Postgres via Docker
-    cmds:
-      - docker compose up -d postgres
-
-  db:down:
-    desc: Stop and remove Postgres container
-    cmds:
-      - docker compose down
-
   docker:build:
     desc: Builds the docker image and assings latest tag
     cmds:
@@ -26,10 +16,6 @@ tasks:
     cmds:
       - docker tag eveann/splitter:latest eveann/splitter:latest
       - docker push ivankloeckner/splitter:latest
-
-  deploy:
-    cmds:
-      - ansible-playbook -i ansible/inventory.ini ansible/playbook.yaml --ask-vault-pass
 
   build:
     desc: Build the binary
